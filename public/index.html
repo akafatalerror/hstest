@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>todo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" integrity="sha384-B0vP5xmATw1+K9KRQjQERJvTumQW0nPEzvF6L/Z6nronJ3oUOFUFpCjEUQouq2+l" crossorigin="anonymous">
+</head>
+<body>
+<div class="container">
+
+</div>
+
+<!-- Begin page content -->
+<main role="main" class="container">
+
+
+    <h1 class="mt-5">ToDo App</h1>
+    <div id="app"></div>
+</main>
+<br>
+<br>
+<footer class="footer">
+    <div class="container footer_menu">
+
+    </div>
+</footer>
+
+<script id="login-template" type="text/x-handlebars-template">
+    <form action="/api/login" id="loginform" class="page">
+        <div class="error"></div>
+
+        <div class="form-group">
+            <label for="exampleFormControlInput1">Login</label>
+            <input type="text" id="login" class="form-control" id="exampleFormControlInput1">
+        </div>
+        <div class="form-group">
+            <label for="exampleFormControlInput1">Password</label>
+            <input id="password" type="password"  class="form-control" id="exampleFormControlInput1" >
+        </div>
+        <button type="submit" class="btn btn-primary mb-2">Submit</button>
+    </form>
+</script>
+
+<script id="todolist-template" type="text/x-handlebars-template">
+    <ul>
+    {{#each todos}}
+        <li>
+            {{category}}. {{title}}
+            <a href="/todo/{{id}}">Подробнее</a>
+        </li>
+    {{/each}}
+    </ul>
+</script>
+
+<script id="item-template" type="text/x-handlebars-template">
+    <div id="item-page">
+        <div class="error"></div>
+        <h4>{{category}}</h4>
+        <h1>{{title}}</h1>
+        <i>{{taskDate}}</i>
+        <p>{{description}}</p>
+        {{#if isDone}}
+        {{else}}
+            <a id="complete" class="complete btn btn-primary mb-2" data-id="{{id}}">Done</a>
+        {{/if}}
+    </div>
+</script>
+
+<script id="upload-template" type="text/x-handlebars-template">
+    <form action="/api/upload"  class="form-inline" id="uploadform" enctype='multipart/form-data'>
+        <div class="error"></div>
+        <div class="form-group mx-sm-3 mb-2">
+            <input id="tasksfile" name="tasksfile" type="file" class="form-control-file"><br>
+        </div>
+        <button type="submit" class="btn btn-primary mb-2">Upload</button>
+
+    </form>
+</script>
+
+<script id="admin-menu-template" type="text/x-handlebars-template">
+    <a href="/upload" class="menu">Загрузить файл</a>
+</script>
+
+</body>
+<script src="https://code.jquery.com/jquery-3.6.0.slim.min.js" integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI=" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.7.7/handlebars.min.js" integrity="sha512-RNLkV3d+aLtfcpEyFG8jRbnWHxUqVZozacROI4J2F1sTaDqo1dPQYs01OMi1t1w9Y2FdbSCDSQ2ZVdAC8bzgAg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.24.0/axios.min.js" integrity="sha512-u9akINsQsAkG9xjc1cnGF4zw5TFDwkxuc9vUp5dltDWYCSmyd0meygbvgXrlc/z7/o4a19Fb5V0OUE58J7dcyw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+
+  const loginTemplate = Handlebars.compile($('#login-template').html());
+  const todoListTemplate = Handlebars.compile($('#todolist-template').html());
+  const todoItemTemplate = Handlebars.compile($('#item-template').html());
+  const uploadTemplate = Handlebars.compile($('#upload-template').html());
+  const adminMenuTemplate = Handlebars.compile($('#admin-menu-template').html());
+
+  let token = localStorage.getItem('token');
+  let userData;
+  if(token){
+      userData = parseJwt(token)
+      if(userData.role === 'admin'){
+          $('.footer_menu').html(adminMenuTemplate);
+      }
+  }
+
+  const router = async function() {
+      const [_empty, controller, param] = window.location.pathname.split('/')
+      const app = $('#app');
+
+      switch (controller){
+          case 'login':
+              if(token) goto('/')
+              app.html(loginTemplate);
+              break;
+          case '':
+              axios.get('/api/tasks', {
+                  headers: {
+                      'x-access-token': token
+                  }
+              })
+                  .then(function (response) {
+                      app.html(todoListTemplate({todos: response.data}));
+                  })
+                  .catch(function (error) {
+                      // handle error
+                      console.log(error);
+
+                  })
+              break;
+          case 'todo':
+              if(param){
+                  axios.get('/api/task/'+param, {
+                      headers: {
+                          'x-access-token': token
+                      }
+                  })
+                      .then(function (response) {
+                          console.log(response)
+                          app.html(todoItemTemplate(response.data));
+                          ;;
+                      })
+                      .catch(function (error) {
+                          // handle error
+                          console.log(error);
+                      })
+                  app.html(todoItemTemplate());
+              }
+              break;
+          case 'upload':
+              if(userData.role !== 'admin') goto('/')
+              app.html(uploadTemplate);
+              break;
+      }
+  }
+
+
+  if(!token && window.location.pathname !== '/login'){
+      goto('/login')
+  } else {
+      router()
+  }
+
+  $(function (){
+
+      $('#loginform').on('submit', function(e){
+          e.preventDefault()
+
+          const body = new FormData();
+          body.append('login', $('#loginform #login').val())
+          body.append('password', $('#loginform #password').val())
+
+          axios({
+              method: "post",
+              url: this.action,
+              data: body,
+              headers: { "Content-Type": "multipart/form-data" },
+          })
+              .then(function (response) {
+                  token = response.data.token;
+                  localStorage.setItem('token', token)
+
+
+                  userData = parseJwt(token)
+                  if(userData.role === 'admin'){
+                      $('.footer_menu').html(adminMenuTemplate);
+                  }
+
+                  goto('/')
+              })
+              .catch(function (response) {
+                  $('#loginform  .error').html(response.response.data.error || response.response.data)
+              });
+      });
+
+      $(document).on('click','#complete', function(e){
+          e.preventDefault()
+          const el = $(this)
+          axios({
+              method: "post",
+              url: '/api/task/'+$(el).data('id'),
+              headers: {
+                  'x-access-token': token,
+                  'Content-Type': 'multipart/form-data'
+              },
+          })
+              .then(function (response) {
+                  goto('/')
+              })
+              .catch(function (response) {
+                  $('#item-page  .error').html(response.response.data.error || response.response.data)
+              });
+
+      })
+
+      $('#uploadform').on('submit', function(e){
+          e.preventDefault()
+
+          const body = new FormData();
+          body.append('tasksfile', document.getElementById('tasksfile').files[0])
+
+          axios({
+              method: "post",
+              url: this.action,
+              data: body,
+              headers: {
+                  "Content-Type": "multipart/form-data",
+                  'x-access-token': token
+              },
+          })
+              .then(function (response) {
+                  goto('/')
+              })
+              .catch(function (response) {
+                  $('#uploadform  .error').html(response.response.data.error || response.response.data)
+              });
+      });
+  })
+
+  function goto(url){
+      window.history.pushState("", "", url);
+      router();
+  }
+
+  function parseJwt (token) {
+      var base64Url = token.split('.')[1];
+      var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      var jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+
+      return JSON.parse(jsonPayload);
+  };
+</script>
+
+</html>
